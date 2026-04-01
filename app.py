@@ -14,11 +14,13 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI as OpenAILLM
 
 # ─── PATHS ───────────────────────────────────────────────────────
-BASE = "C:/Users/sanoo/bri-research-assistant"
-CHROMA_PATH = f"{BASE}/data/chroma_db"
-DB_PATH = f"{BASE}/data/bri_research.db"
-ENV_PATH = f"{BASE}/.env"
+import os
 
+BASE = os.getcwd()   # current project folder (works in cloud)
+
+CHROMA_PATH = os.path.join(BASE, "data", "chroma_db")
+DB_PATH = os.path.join(BASE, "data", "bri_research.db")
+ENV_PATH = os.path.join(BASE, ".env")
 # ─── PAGE CONFIG ─────────────────────────────────────────────────
 def ensure_chromadb():
     chroma_local = os.path.join(BASE, "data", "chroma_db")

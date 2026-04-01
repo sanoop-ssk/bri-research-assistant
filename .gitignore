@@ -1,0 +1,11 @@
+﻿.env
+venv/
+__pycache__/
+*.pyc
+data/chroma_db/
+data/*.csv
+data/Chinese_Infrastrcuture_Aiddata_Dataset.csv
+.streamlit/secrets.toml
+notebooks/
+.ipynb_checkpoints/
+*.ipynb

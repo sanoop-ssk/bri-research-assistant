@@ -22,6 +22,13 @@ CHROMA_PATH = os.path.join(BASE, "data", "chroma_db")
 DB_PATH = os.path.join(BASE, "data", "bri_research.db")
 ENV_PATH = os.path.join(BASE, ".env")
 # ─── PAGE CONFIG ─────────────────────────────────────────────────
+ensure_chromadb()
+st.set_page_config(
+    page_title="BRI Finance Research Assistant",
+    page_icon="🌐",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 def ensure_chromadb():
     chroma_local = os.path.join(BASE, "data", "chroma_db")
     if os.path.exists(os.path.join(chroma_local, "chroma.sqlite3")):
@@ -42,14 +49,6 @@ def ensure_chromadb():
     except Exception as e:
         st.error(f"Failed to download document index: {e}")
         st.stop()
-
-ensure_chromadb()
-st.set_page_config(
-    page_title="BRI Finance Research Assistant",
-    page_icon="🌐",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
 
 # ─── SESSION STATE INIT ──────────────────────────────────────────
 if "page" not in st.session_state:

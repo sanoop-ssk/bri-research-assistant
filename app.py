@@ -21,34 +21,36 @@ BASE = os.getcwd()   # current project folder (works in cloud)
 CHROMA_PATH = os.path.join(BASE, "data", "chroma_db")
 DB_PATH = os.path.join(BASE, "data", "bri_research.db")
 ENV_PATH = os.path.join(BASE, ".env")
-# ─── PAGE CONFIG ─────────────────────────────────────────────────
-ensure_chromadb()
-st.set_page_config(
-    page_title="BRI Finance Research Assistant",
-    page_icon="🌐",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# ─── CHROMA DOWNLOAD ─────────────────────────────────────────────
 def ensure_chromadb():
     chroma_local = os.path.join(BASE, "data", "chroma_db")
     if os.path.exists(os.path.join(chroma_local, "chroma.sqlite3")):
-        return  # already present, skip download
-    st.info("First run: downloading document index (~5GB). This takes 5–10 minutes and only happens once.", icon="⏳")
+        return
+    st.info("First run: downloading document index. This takes 5-10 minutes.")
     try:
         from huggingface_hub import snapshot_download
-        import shutil
         token = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN", None)
-        downloaded = snapshot_download(
+        snapshot_download(
             repo_id="sanoop-ssk/bri-monitor-chromadb",
             repo_type="dataset",
             local_dir=chroma_local,
             token=token
         )
-        st.success("Document index ready.", icon="✅")
+        st.success("Document index ready.")
         st.rerun()
     except Exception as e:
         st.error(f"Failed to download document index: {e}")
         st.stop()
+
+# ─── PAGE CONFIG ─────────────────────────────────────────────────
+st.set_page_config(
+    page_title="The BRI Monitor",
+    page_icon="🌐",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+ensure_chromadb()
 
 # ─── SESSION STATE INIT ──────────────────────────────────────────
 if "page" not in st.session_state:

@@ -37,7 +37,7 @@ FORMSPREE = "https://formspree.io/f/xreoqrdl"
 # ── Auto-download chroma_db from Hugging Face on first cloud run ──
 def ensure_chromadb():
     """Download chroma_db from Hugging Face on first cloud run.
-    GeoJSON is handled separately via get_geojson() in-memory cache."""
+    GeoJSON map uses Plotly built-in boundaries — no download needed."""
     import os as _os
     chroma_local = _os.path.join(BASE, "data", "chroma_db")
     if _os.path.exists(_os.path.join(chroma_local, "chroma.sqlite3")):
@@ -386,34 +386,6 @@ def initialize():
 @st.cache_resource
 def get_con():
     return duckdb.connect(DB_PATH, read_only=True)
-
-@st.cache_resource(show_spinner=False)
-def get_geojson():
-    """Load World Bank GeoJSON into server memory.
-    First tries local disk (fast), then downloads from Hugging Face into memory.
-    @st.cache_resource means this runs once per server lifetime — safe across reruns."""
-    import json as _json, urllib.request as _ur
-    # Try disk first (local dev or already downloaded)
-    path = os.path.join(BASE, "data", "world_bank_admin0.geojson")
-    if os.path.exists(path):
-        try:
-            with open(path) as _f:
-                return _json.load(_f)
-        except Exception:
-            pass  # fall through to network download
-    # Download directly into memory — no disk write, survives Streamlit reruns
-    try:
-        token = os.getenv("HF_TOKEN", "")
-        _url = (
-            "https://huggingface.co/datasets/sanoop-ssk/bri-monitor-chromadb"
-            "/resolve/main/world_bank_admin0.geojson"
-        )
-        _headers = {"Authorization": f"Bearer {token}"} if token else {}
-        _req = _ur.Request(_url, headers=_headers)
-        with _ur.urlopen(_req, timeout=120) as _resp:
-            return _json.loads(_resp.read().decode("utf-8"))
-    except Exception:
-        return None  # fallback map will be used
 
 
 # ── System prompt ─────────────────────────────────────────────────
@@ -1675,98 +1647,88 @@ def show_data_explorer():
                  .reset_index())
         col = "Financing_Bn" if "Financing" in metric else "Projects"
         col_lbl = "Financing (USD Bn)" if col=="Financing_Bn" else "Project Count"
-        # ── World Bank GeoJSON map with country-name fallback ────────
-        COLOR_SCALE  = [[0,"#EBF5FB"],[.15,"#AED6F1"],[.35,"#5DADE2"],
-                        [.6,"#2E86C1"],[.8,"#1B4F72"],[1,"#0A1931"]]
-        MAP_LAYOUT   = dict(
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0,r=0,t=42,b=8), height=460,
-            title=dict(text=f"Chinese Infrastructure {col_lbl} by Country",
-                       font=dict(size=13,color=t["navy"])),
-            coloraxis_colorbar=dict(thickness=12,len=.55,tickfont=dict(size=9))
-        )
-
+        # ── Choropleth map — instant, no external download ─────────
+        # Uses Plotly built-in Natural Earth boundaries (ISO-3 locationmode).
+        # Fast, reliable, no disk/memory dependency. Boundary disclaimer below.
+        COUNTRY_ISO3 = {
+            "Afghanistan":"AFG","Albania":"ALB","Algeria":"DZA","Angola":"AGO",
+            "Argentina":"ARG","Armenia":"ARM","Azerbaijan":"AZE","Bangladesh":"BGD",
+            "Belarus":"BLR","Benin":"BEN","Bolivia":"BOL","Bosnia and Herzegovina":"BIH",
+            "Brazil":"BRA","Bulgaria":"BGR","Burkina Faso":"BFA","Cambodia":"KHM",
+            "Cameroon":"CMR","Chad":"TCD","Chile":"CHL","Colombia":"COL",
+            "Congo":"COG","Congo, Democratic Republic of the":"COD","Costa Rica":"CRI",
+            "Cote d'Ivoire":"CIV","Croatia":"HRV","Cuba":"CUB","Djibouti":"DJI",
+            "Dominican Republic":"DOM","Ecuador":"ECU","Egypt":"EGY","Ethiopia":"ETH",
+            "Fiji":"FJI","Gabon":"GAB","Gambia":"GMB","Ghana":"GHA","Guinea":"GIN",
+            "Guinea-Bissau":"GNB","Guyana":"GUY","Honduras":"HND","Hungary":"HUN",
+            "India":"IND","Indonesia":"IDN","Iran":"IRN","Iraq":"IRQ",
+            "Jamaica":"JAM","Jordan":"JOR","Kazakhstan":"KAZ","Kenya":"KEN",
+            "Kosovo":"XKX","Kyrgyz Republic":"KGZ","Laos":"LAO","Lebanon":"LBN",
+            "Lesotho":"LSO","Liberia":"LBR","Libya":"LBY","Madagascar":"MDG",
+            "Malawi":"MWI","Malaysia":"MYS","Maldives":"MDV","Mali":"MLI",
+            "Mauritania":"MRT","Mauritius":"MUS","Mexico":"MEX","Moldova":"MDA",
+            "Mongolia":"MNG","Montenegro":"MNE","Morocco":"MAR","Mozambique":"MOZ",
+            "Myanmar":"MMR","Namibia":"NAM","Nepal":"NPL","Nicaragua":"NIC",
+            "Niger":"NER","Nigeria":"NGA","North Macedonia":"MKD","Oman":"OMN",
+            "Pakistan":"PAK","Panama":"PAN","Papua New Guinea":"PNG","Paraguay":"PRY",
+            "Peru":"PER","Philippines":"PHL","Qatar":"QAT","Romania":"ROU",
+            "Russia":"RUS","Rwanda":"RWA","Saudi Arabia":"SAU","Senegal":"SEN",
+            "Serbia":"SRB","Sierra Leone":"SLE","Solomon Islands":"SLB",
+            "Somalia":"SOM","South Africa":"ZAF","South Sudan":"SSD","Sri Lanka":"LKA",
+            "Sudan":"SDN","Suriname":"SUR","Syrian Arab Republic":"SYR",
+            "Tajikistan":"TJK","Tanzania":"TZA","Thailand":"THA","Timor-Leste":"TLS",
+            "Togo":"TGO","Trinidad and Tobago":"TTO","Tunisia":"TUN","Turkey":"TUR",
+            "Turkmenistan":"TKM","Uganda":"UGA","Ukraine":"UKR",
+            "United Arab Emirates":"ARE","Uruguay":"URY","Uzbekistan":"UZB",
+            "Venezuela":"VEN","Vietnam":"VNM","Yemen":"YEM","Zambia":"ZMB",
+            "Zimbabwe":"ZWE","El Salvador":"SLV","Eritrea":"ERI","Eswatini":"SWZ",
+            "Georgia":"GEO","Guatemala":"GTM","Haiti":"HTI","Kuwait":"KWT",
+            "Mozambique":"MOZ","North Korea":"PRK","Palestine":"PSE",
+        }
         try:
-            with st.spinner("Loading map boundaries…"):
-                geojson_data = get_geojson()  # @st.cache_resource — runs once, cached forever
-            if geojson_data is not None:
-                # ── Path A: World Bank official boundaries (GeoJSON) ────
-                # ISO3 country-name lookup for matching dataset country names
-                COUNTRY_ISO3 = {
-                    "Afghanistan":"AFG","Albania":"ALB","Algeria":"DZA","Angola":"AGO",
-                    "Argentina":"ARG","Armenia":"ARM","Azerbaijan":"AZE","Bangladesh":"BGD",
-                    "Belarus":"BLR","Benin":"BEN","Bolivia":"BOL","Bosnia and Herzegovina":"BIH",
-                    "Brazil":"BRA","Bulgaria":"BGR","Burkina Faso":"BFA","Cambodia":"KHM",
-                    "Cameroon":"CMR","Chad":"TCD","Chile":"CHL","Colombia":"COL",
-                    "Congo":"COG","Congo, Democratic Republic of the":"COD","Costa Rica":"CRI",
-                    "Cote d'Ivoire":"CIV","Croatia":"HRV","Cuba":"CUB","Djibouti":"DJI",
-                    "Dominican Republic":"DOM","Ecuador":"ECU","Egypt":"EGY","Ethiopia":"ETH",
-                    "Fiji":"FJI","Gabon":"GAB","Gambia":"GMB","Ghana":"GHA","Guinea":"GIN",
-                    "Guinea-Bissau":"GNB","Guyana":"GUY","Honduras":"HND","Hungary":"HUN",
-                    "India":"IND","Indonesia":"IDN","Iran":"IRN","Iraq":"IRQ",
-                    "Jamaica":"JAM","Jordan":"JOR","Kazakhstan":"KAZ","Kenya":"KEN",
-                    "Kosovo":"XKX","Kyrgyz Republic":"KGZ","Laos":"LAO","Lebanon":"LBN",
-                    "Lesotho":"LSO","Liberia":"LBR","Libya":"LBY","Madagascar":"MDG",
-                    "Malawi":"MWI","Malaysia":"MYS","Maldives":"MDV","Mali":"MLI",
-                    "Mauritania":"MRT","Mauritius":"MUS","Mexico":"MEX","Moldova":"MDA",
-                    "Mongolia":"MNG","Montenegro":"MNE","Morocco":"MAR","Mozambique":"MOZ",
-                    "Myanmar":"MMR","Namibia":"NAM","Nepal":"NPL","Nicaragua":"NIC",
-                    "Niger":"NER","Nigeria":"NGA","North Macedonia":"MKD","Oman":"OMN",
-                    "Pakistan":"PAK","Panama":"PAN","Papua New Guinea":"PNG","Paraguay":"PRY",
-                    "Peru":"PER","Philippines":"PHL","Qatar":"QAT","Romania":"ROU",
-                    "Russia":"RUS","Rwanda":"RWA","Saudi Arabia":"SAU","Senegal":"SEN",
-                    "Serbia":"SRB","Sierra Leone":"SLE","Solomon Islands":"SLB",
-                    "Somalia":"SOM","South Africa":"ZAF","South Sudan":"SSD","Sri Lanka":"LKA",
-                    "Sudan":"SDN","Suriname":"SUR","Syrian Arab Republic":"SYR",
-                    "Tajikistan":"TJK","Tanzania":"TZA","Thailand":"THA","Timor-Leste":"TLS",
-                    "Togo":"TGO","Trinidad and Tobago":"TTO","Tunisia":"TUN","Turkey":"TUR",
-                    "Turkmenistan":"TKM","Uganda":"UGA","Ukraine":"UKR",
-                    "United Arab Emirates":"ARE","Uruguay":"URY","Uzbekistan":"UZB",
-                    "Venezuela":"VEN","Vietnam":"VNM","Yemen":"YEM","Zambia":"ZMB",
-                    "Zimbabwe":"ZWE","Cuba":"CUB","Ecuador":"ECU","El Salvador":"SLV",
-                    "Eritrea":"ERI","Eswatini":"SWZ","Georgia":"GEO","Guatemala":"GTM",
-                    "Haiti":"HTI","Iran":"IRN","Kuwait":"KWT","Libya":"LBY",
-                }
-
-                # Map country names to ISO3
-                agg_map = agg.copy()
-                agg_map["ISO3"] = agg_map["Country"].map(COUNTRY_ISO3)
-                agg_map = agg_map.dropna(subset=["ISO3"])
-                fig = px.choropleth(
-                    agg_map, locations="ISO3",
-                    geojson=geojson_data,
-                    featureidkey="properties.ISO_A3",
-                    color=col,
-                    color_continuous_scale=COLOR_SCALE,
-                    labels={col:col_lbl, "Country":"Country"},
-                    hover_name="Country")
-                fig.update_geos(fitbounds="locations", visible=False)
-                fig.update_layout(**MAP_LAYOUT)
-                st.plotly_chart(fig, use_container_width=True)
-                # ── World Bank boundary disclaimer ──
-                st.caption("Source: World Bank Official Boundaries (2025)")
-                st.caption("Note: Boundaries are shown for analytical purposes only "
-                           "and do not imply any official position on territorial disputes.")
-            else:
-                # ── Path B: Fallback — GeoJSON not yet downloaded ────
-                st.info("Map boundary file not yet downloaded. Using standard boundaries.", icon="ℹ️")
-                fig = px.choropleth(
-                    agg, locations="Country", locationmode="country names",
-                    color=col, color_continuous_scale=COLOR_SCALE,
-                    labels={col:col_lbl},
-                    projection="natural earth")
-                fig.update_geos(showcoastlines=True, coastlinecolor="#CCCCCC",
-                    showland=True, landcolor="#F8F9FA",
-                    showocean=True, oceancolor="#EBF5FB",
-                    showlakes=False, showframe=False)
-                fig.update_layout(**MAP_LAYOUT)
-                st.plotly_chart(fig, use_container_width=True)
-                st.caption("Map uses standard Plotly boundaries. "
-                           "Upload world_bank_admin0.geojson to data/ for World Bank boundaries.")
+            agg_map = agg.copy()
+            agg_map["ISO3"] = agg_map["Country"].map(COUNTRY_ISO3)
+            agg_map = agg_map.dropna(subset=["ISO3"])
+            col = "Financing_Bn" if "Financing" in metric else "Projects"
+            col_lbl = "Financing (USD Bn)" if col == "Financing_Bn" else "Project Count"
+            fig = px.choropleth(
+                agg_map,
+                locations="ISO3",
+                locationmode="ISO-3",
+                color=col,
+                color_continuous_scale=[[0,"#EBF5FB"],[.15,"#AED6F1"],
+                    [.35,"#5DADE2"],[.6,"#2E86C1"],[.8,"#1B4F72"],[1,"#0A1931"]],
+                labels={col: col_lbl},
+                hover_name="Country",
+                projection="natural earth",
+            )
+            fig.update_geos(
+                showcoastlines=True, coastlinecolor="#888888",
+                showland=True,      landcolor="#1C2330",
+                showocean=True,     oceancolor="#0D1117",
+                showlakes=False,    showframe=False,
+                showcountries=True, countrycolor="#333D4D",
+            )
+            fig.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0,r=0,t=42,b=8), height=430,
+                title=dict(text=f"Chinese Infrastructure {col_lbl} by Country",
+                           font=dict(size=13, color=t["navy"])),
+                coloraxis_colorbar=dict(thickness=12, len=.55,
+                                        tickfont=dict(size=9),
+                                        title=dict(text=col_lbl, font=dict(size=9))),
+                geo=dict(bgcolor="rgba(0,0,0,0)"),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(
+                "Source: AidData (2025) CGLD v1.0 · "
+                "Boundaries shown for analytical purposes only and do not imply "
+                "any official position on territorial disputes."
+            )
         except Exception as e:
             st.info(f"Map unavailable: {e}")
 
-        # ── Country Profile Panel ──
+                # ── Country Profile Panel ──
         st.markdown('<p class="sec" style="margin-top:.8rem">Country Profile</p>',
                     unsafe_allow_html=True)
         all_countries = sorted(agg["Country"].tolist())

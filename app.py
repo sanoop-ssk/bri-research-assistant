@@ -36,23 +36,38 @@ FORMSPREE = "https://formspree.io/f/xreoqrdl"
 
 # ── Auto-download chroma_db from Hugging Face on first cloud run ──
 def ensure_chromadb():
-    chroma_local = os.path.join(BASE, "data", "chroma_db")
-    if os.path.exists(os.path.join(chroma_local, "chroma.sqlite3")):
-        return  # already present locally, skip download
-    st.info("First run: downloading document index. This takes 5-10 minutes and only happens once.")
+    import os as _os
+    chroma_local = _os.path.join(BASE, "data", "chroma_db")
+    geojson_local = _os.path.join(BASE, "data", "world_bank_admin0.geojson")
+    chroma_ready  = _os.path.exists(_os.path.join(chroma_local, "chroma.sqlite3"))
+    geojson_ready = _os.path.exists(geojson_local)
+    if chroma_ready and geojson_ready:
+        return  # both present, nothing to download
     try:
-        from huggingface_hub import snapshot_download
+        from huggingface_hub import hf_hub_download, snapshot_download
         token = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN", None)
-        snapshot_download(
-            repo_id="sanoop-ssk/bri-monitor-chromadb",
-            repo_type="dataset",
-            local_dir=chroma_local,
-            token=token
-        )
-        st.success("Document index ready.")
+        if not chroma_ready:
+            st.info("First run: downloading document index (~5 GB). This takes 5–10 minutes and only happens once.")
+            snapshot_download(
+                repo_id="sanoop-ssk/bri-monitor-chromadb",
+                repo_type="dataset",
+                local_dir=chroma_local,
+                token=token,
+                ignore_patterns=["world_bank_admin0.geojson"],
+            )
+        if not geojson_ready:
+            st.info("Downloading World Bank boundary map file…")
+            hf_hub_download(
+                repo_id="sanoop-ssk/bri-monitor-chromadb",
+                repo_type="dataset",
+                filename="world_bank_admin0.geojson",
+                local_dir=_os.path.join(BASE, "data"),
+                token=token,
+            )
+        st.success("Data files ready.")
         st.rerun()
     except Exception as e:
-        st.error(f"Failed to download document index: {e}")
+        st.error(f"Failed to download data files: {e}")
         st.stop()
 
 st.set_page_config(
@@ -1004,20 +1019,14 @@ div[data-testid="stHorizontalBlock"] button[kind="primary"] {
 </style>""", unsafe_allow_html=True)
     c0, *nav_cols, cz = st.columns([3]+[1.5]*len(NAV)+[0.5])
     with c0:
-        # Logo embedded inline as base64 — no file dependency on cloud
-        st.markdown(f"""
-<div style="display:flex;align-items:center;gap:.55rem;padding:.2rem 0">
-  <img src="data:image/png;base64,{LOGO_B64}"
-       style="width:38px;height:38px;border-radius:50%;object-fit:cover;
-              flex-shrink:0;border:1.5px solid rgba(255,255,255,.25)"/>
-  <div>
-    <p style="color:#fff !important;font-size:1.05rem;font-weight:800;margin:0;
-              font-family:Arial,sans-serif;letter-spacing:-.01em;line-height:1.2">
-      BRI DataLab</p>
-    <p style="color:#A8D4F5 !important;font-size:.58rem;margin:0;
-              font-family:Arial,sans-serif;white-space:nowrap;line-height:1.3">
-      AI-assisted · Chinese infrastructure finance</p>
-  </div>
+        st.markdown("""
+<div style="padding:.3rem 0">
+  <p style="color:#fff !important;font-size:1.05rem;font-weight:800;margin:0;
+            font-family:Arial,sans-serif;letter-spacing:-.01em">🌐 BRI DataLab</p>
+  <p style="color:#A8D4F5 !important;font-size:.62rem;margin:.06rem 0 0;
+            font-family:Arial,sans-serif;white-space:nowrap;overflow:hidden;
+            text-overflow:ellipsis">
+    AI-assisted · Chinese infrastructure finance</p>
 </div>""", unsafe_allow_html=True)
     cur = st.session_state.page
     for col, (pg, label) in zip(nav_cols, NAV):
@@ -1179,25 +1188,33 @@ def show_home():
 
     with hero_right:
         st.markdown(f"""
-<div style="background:#0D1B2E;border-radius:10px;padding:1.5rem 2rem 1.5rem 2.2rem;
+<div style="background:#0D1B2E;border-radius:10px;padding:1.4rem 1.6rem;
             border:1px solid rgba(46,109,164,.3);position:relative;overflow:hidden;
             background-image:linear-gradient(rgba(46,109,164,.05) 1px,transparent 1px),
             linear-gradient(90deg,rgba(46,109,164,.05) 1px,transparent 1px);
             background-size:36px 36px;min-height:200px;display:flex;
-            flex-direction:column;justify-content:center;box-sizing:border-box">
-  <p style="color:#5BB8F5;font-size:.68rem;font-weight:700;letter-spacing:.14em;
-            text-transform:uppercase;margin:0 0 .4rem;font-family:Arial,sans-serif">
-    Chinese Development Finance Research Platform</p>
-  <div style="color:#FFFFFF;font-size:1.75rem;font-weight:800;line-height:1.1;
-              font-family:Arial,sans-serif;margin:0 0 .35rem;letter-spacing:-.02em">
-    BRI DataLab</div>
-  <p style="color:#A8C8E8;font-size:.82rem;margin:0 0 .75rem;max-width:480px;
-            line-height:1.6;font-family:Arial,sans-serif">
-    AI-assisted research platform for analyzing Chinese infrastructure finance.
-    Integrating AidData records with policy documents and academic literature
-    for evidence-based analysis.</p>
-  <div style="display:flex;gap:.55rem;flex-wrap:wrap">
-    {"".join(f'<span style="background:rgba(46,109,164,.25);border:1px solid rgba(91,184,245,.28);color:#5BB8F5;font-size:.69rem;font-weight:600;padding:.22rem .65rem;border-radius:20px;font-family:Arial,sans-serif">{lbl}</span>' for lbl in ["4,861 Projects","183 Countries","$1.2 Trillion","2000–2023","42 Documents"])}
+            flex-direction:row;align-items:center;gap:1.4rem;box-sizing:border-box">
+  <!-- Logo -->
+  <img src="data:image/png;base64,{LOGO_B64}"
+       style="width:110px;height:110px;border-radius:50%;object-fit:cover;
+              flex-shrink:0;border:2px solid rgba(91,184,245,.35);
+              box-shadow:0 0 18px rgba(46,109,164,.4)"/>
+  <!-- Text -->
+  <div style="flex:1;min-width:0">
+    <p style="color:#5BB8F5;font-size:.68rem;font-weight:700;letter-spacing:.14em;
+              text-transform:uppercase;margin:0 0 .35rem;font-family:Arial,sans-serif">
+      Chinese Development Finance Research Platform</p>
+    <div style="color:#FFFFFF;font-size:1.65rem;font-weight:800;line-height:1.1;
+                font-family:Arial,sans-serif;margin:0 0 .35rem;letter-spacing:-.02em">
+      BRI DataLab</div>
+    <p style="color:#A8C8E8;font-size:.82rem;margin:0 0 .7rem;
+              line-height:1.6;font-family:Arial,sans-serif">
+      AI-assisted research platform for analyzing Chinese infrastructure finance.
+      Integrating AidData records with policy documents and academic literature
+      for evidence-based analysis.</p>
+    <div style="display:flex;gap:.55rem;flex-wrap:wrap">
+      {"".join(f'<span style="background:rgba(46,109,164,.25);border:1px solid rgba(91,184,245,.28);color:#5BB8F5;font-size:.69rem;font-weight:600;padding:.22rem .65rem;border-radius:20px;font-family:Arial,sans-serif">{lbl}</span>' for lbl in ["4,861 Projects","183 Countries","$1.2 Trillion","2000–2023","42 Documents"])}
+    </div>
   </div>
 </div>""", unsafe_allow_html=True)
 
@@ -1302,7 +1319,7 @@ def show_home():
     <div><p style="color:{t['navy']} !important;font-weight:700;font-size:.82rem;margin:0 0 .22rem">
       🗺️ Map</p>
       <p style="font-size:.79rem;margin:0;line-height:1.5">
-      Choropleth maps of financing and project counts globally</p></div>
+      Choropleth maps of financing and project counts</p></div>
     <div><p style="color:{t['navy']} !important;font-weight:700;font-size:.82rem;margin:0 0 .22rem">
       📄 Documents</p>
       <p style="font-size:.79rem;margin:0;line-height:1.5">

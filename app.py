@@ -36,42 +36,27 @@ FORMSPREE = "https://formspree.io/f/xreoqrdl"
 
 # ── Auto-download chroma_db from Hugging Face on first cloud run ──
 def ensure_chromadb():
+    """Download chroma_db from Hugging Face on first cloud run.
+    GeoJSON is handled separately via get_geojson() in-memory cache."""
     import os as _os
     chroma_local = _os.path.join(BASE, "data", "chroma_db")
-    geojson_local = _os.path.join(BASE, "data", "world_bank_admin0.geojson")
-    chroma_ready  = _os.path.exists(_os.path.join(chroma_local, "chroma.sqlite3"))
-    geojson_ready = _os.path.exists(geojson_local)
-    if chroma_ready and geojson_ready:
-        return  # both present, nothing to download
+    if _os.path.exists(_os.path.join(chroma_local, "chroma.sqlite3")):
+        return  # already present, skip
     try:
-        from huggingface_hub import hf_hub_download, snapshot_download
+        from huggingface_hub import snapshot_download
         token = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN", None)
-        if not chroma_ready:
-            st.info("First run: downloading document index (~5 GB). This takes 5–10 minutes and only happens once.")
-            snapshot_download(
-                repo_id="sanoop-ssk/bri-monitor-chromadb",
-                repo_type="dataset",
-                local_dir=chroma_local,
-                token=token,
-                ignore_patterns=["world_bank_admin0.geojson"],
-            )
-        if not geojson_ready:
-            st.info("Downloading World Bank boundary map file (168 MB)…")
-            import urllib.request as _ur
-            _hf_url = (
-                "https://huggingface.co/datasets/sanoop-ssk/bri-monitor-chromadb"
-                "/resolve/main/world_bank_admin0.geojson"
-            )
-            _headers = {"Authorization": f"Bearer {token}"} if token else {}
-            _req = _ur.Request(_hf_url, headers=_headers)
-            _dest = _os.path.join(BASE, "data", "world_bank_admin0.geojson")
-            _os.makedirs(_os.path.dirname(_dest), exist_ok=True)
-            with _ur.urlopen(_req) as _resp, open(_dest, "wb") as _out:
-                _out.write(_resp.read())
-        st.success("Data files ready.")
+        st.info("First run: downloading document index (~5 GB). This takes 5–10 minutes and only happens once.")
+        snapshot_download(
+            repo_id="sanoop-ssk/bri-monitor-chromadb",
+            repo_type="dataset",
+            local_dir=chroma_local,
+            token=token,
+            ignore_patterns=["world_bank_admin0.geojson"],
+        )
+        st.success("Document index ready.")
         st.rerun()
     except Exception as e:
-        st.error(f"Failed to download data files: {e}")
+        st.error(f"Failed to download document index: {e}")
         st.stop()
 
 st.set_page_config(
@@ -401,6 +386,34 @@ def initialize():
 @st.cache_resource
 def get_con():
     return duckdb.connect(DB_PATH, read_only=True)
+
+@st.cache_resource(show_spinner=False)
+def get_geojson():
+    """Load World Bank GeoJSON into server memory.
+    First tries local disk (fast), then downloads from Hugging Face into memory.
+    @st.cache_resource means this runs once per server lifetime — safe across reruns."""
+    import json as _json, urllib.request as _ur
+    # Try disk first (local dev or already downloaded)
+    path = os.path.join(BASE, "data", "world_bank_admin0.geojson")
+    if os.path.exists(path):
+        try:
+            with open(path) as _f:
+                return _json.load(_f)
+        except Exception:
+            pass  # fall through to network download
+    # Download directly into memory — no disk write, survives Streamlit reruns
+    try:
+        token = os.getenv("HF_TOKEN", "")
+        _url = (
+            "https://huggingface.co/datasets/sanoop-ssk/bri-monitor-chromadb"
+            "/resolve/main/world_bank_admin0.geojson"
+        )
+        _headers = {"Authorization": f"Bearer {token}"} if token else {}
+        _req = _ur.Request(_url, headers=_headers)
+        with _ur.urlopen(_req, timeout=120) as _resp:
+            return _json.loads(_resp.read().decode("utf-8"))
+    except Exception:
+        return None  # fallback map will be used
 
 
 # ── System prompt ─────────────────────────────────────────────────
@@ -1663,7 +1676,6 @@ def show_data_explorer():
         col = "Financing_Bn" if "Financing" in metric else "Projects"
         col_lbl = "Financing (USD Bn)" if col=="Financing_Bn" else "Project Count"
         # ── World Bank GeoJSON map with country-name fallback ────────
-        GEOJSON_PATH = os.path.join(BASE, "data", "world_bank_admin0.geojson")
         COLOR_SCALE  = [[0,"#EBF5FB"],[.15,"#AED6F1"],[.35,"#5DADE2"],
                         [.6,"#2E86C1"],[.8,"#1B4F72"],[1,"#0A1931"]]
         MAP_LAYOUT   = dict(
@@ -1674,14 +1686,10 @@ def show_data_explorer():
             coloraxis_colorbar=dict(thickness=12,len=.55,tickfont=dict(size=9))
         )
 
-        @st.cache_data(ttl=86400, show_spinner=False)
-        def _load_geojson(path):
-            import json
-            with open(path) as _f:
-                return json.load(_f)
-
         try:
-            if os.path.exists(GEOJSON_PATH):
+            with st.spinner("Loading map boundaries…"):
+                geojson_data = get_geojson()  # @st.cache_resource — runs once, cached forever
+            if geojson_data is not None:
                 # ── Path A: World Bank official boundaries (GeoJSON) ────
                 # ISO3 country-name lookup for matching dataset country names
                 COUNTRY_ISO3 = {
@@ -1719,8 +1727,7 @@ def show_data_explorer():
                     "Eritrea":"ERI","Eswatini":"SWZ","Georgia":"GEO","Guatemala":"GTM",
                     "Haiti":"HTI","Iran":"IRN","Kuwait":"KWT","Libya":"LBY",
                 }
-                with st.spinner("Loading boundary data..."):
-                    geojson_data = _load_geojson(GEOJSON_PATH)
+
                 # Map country names to ISO3
                 agg_map = agg.copy()
                 agg_map["ISO3"] = agg_map["Country"].map(COUNTRY_ISO3)
@@ -1741,7 +1748,8 @@ def show_data_explorer():
                 st.caption("Note: Boundaries are shown for analytical purposes only "
                            "and do not imply any official position on territorial disputes.")
             else:
-                # ── Path B: Fallback — standard Plotly country names ────
+                # ── Path B: Fallback — GeoJSON not yet downloaded ────
+                st.info("Map boundary file not yet downloaded. Using standard boundaries.", icon="ℹ️")
                 fig = px.choropleth(
                     agg, locations="Country", locationmode="country names",
                     color=col, color_continuous_scale=COLOR_SCALE,

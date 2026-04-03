@@ -56,14 +56,18 @@ def ensure_chromadb():
                 ignore_patterns=["world_bank_admin0.geojson"],
             )
         if not geojson_ready:
-            st.info("Downloading World Bank boundary map file…")
-            hf_hub_download(
-                repo_id="sanoop-ssk/bri-monitor-chromadb",
-                repo_type="dataset",
-                filename="world_bank_admin0.geojson",
-                local_dir=_os.path.join(BASE, "data"),
-                token=token,
+            st.info("Downloading World Bank boundary map file (168 MB)…")
+            import urllib.request as _ur
+            _hf_url = (
+                "https://huggingface.co/datasets/sanoop-ssk/bri-monitor-chromadb"
+                "/resolve/main/world_bank_admin0.geojson"
             )
+            _headers = {"Authorization": f"Bearer {token}"} if token else {}
+            _req = _ur.Request(_hf_url, headers=_headers)
+            _dest = _os.path.join(BASE, "data", "world_bank_admin0.geojson")
+            _os.makedirs(_os.path.dirname(_dest), exist_ok=True)
+            with _ur.urlopen(_req) as _resp, open(_dest, "wb") as _out:
+                _out.write(_resp.read())
         st.success("Data files ready.")
         st.rerun()
     except Exception as e:
@@ -1319,7 +1323,7 @@ def show_home():
     <div><p style="color:{t['navy']} !important;font-weight:700;font-size:.82rem;margin:0 0 .22rem">
       🗺️ Map</p>
       <p style="font-size:.79rem;margin:0;line-height:1.5">
-      Choropleth maps of financing and project counts</p></div>
+      World Bank boundary-compliant choropleth maps of financing and project counts</p></div>
     <div><p style="color:{t['navy']} !important;font-weight:700;font-size:.82rem;margin:0 0 .22rem">
       📄 Documents</p>
       <p style="font-size:.79rem;margin:0;line-height:1.5">
@@ -1669,10 +1673,16 @@ def show_data_explorer():
                        font=dict(size=13,color=t["navy"])),
             coloraxis_colorbar=dict(thickness=12,len=.55,tickfont=dict(size=9))
         )
+
+        @st.cache_data(ttl=86400, show_spinner=False)
+        def _load_geojson(path):
+            import json
+            with open(path) as _f:
+                return json.load(_f)
+
         try:
             if os.path.exists(GEOJSON_PATH):
                 # ── Path A: World Bank official boundaries (GeoJSON) ────
-                import json
                 # ISO3 country-name lookup for matching dataset country names
                 COUNTRY_ISO3 = {
                     "Afghanistan":"AFG","Albania":"ALB","Algeria":"DZA","Angola":"AGO",
@@ -1709,8 +1719,8 @@ def show_data_explorer():
                     "Eritrea":"ERI","Eswatini":"SWZ","Georgia":"GEO","Guatemala":"GTM",
                     "Haiti":"HTI","Iran":"IRN","Kuwait":"KWT","Libya":"LBY",
                 }
-                with open(GEOJSON_PATH) as gf:
-                    geojson_data = json.load(gf)
+                with st.spinner("Loading boundary data..."):
+                    geojson_data = _load_geojson(GEOJSON_PATH)
                 # Map country names to ISO3
                 agg_map = agg.copy()
                 agg_map["ISO3"] = agg_map["Country"].map(COUNTRY_ISO3)

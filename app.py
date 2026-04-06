@@ -1698,6 +1698,7 @@ def show_data_explorer():
                 lambda x: max(abs(float(x)), 1.0) if pd.notnull(x) else 1.0
             )
             
+            # --- THE CORRECTED BUBBLE MAP ---
             fig = px.scatter_geo(
                 agg_map,
                 locations="ISO3",
@@ -1705,7 +1706,7 @@ def show_data_explorer():
                 color=col,
                 size="Bubble_Size", 
                 size_max=35,
-                color_continuous_scale="cyan",
+                color_continuous_scale="teal", # <-- FIXED: Uses an approved Plotly colorscale
                 labels={col: col_lbl, "Bubble_Size": "Size"},
                 hover_name="Country",
                 projection="natural earth",

@@ -1705,7 +1705,7 @@ def show_data_explorer():
             if light_mode:
                 ocean_col = "#D6E4F0" # Deeper pastel blue for contrast
                 land_col = "#FFFFFF"  # Pure white continents
-                font_col = "#000000"  # Pure black text
+                font_col = "#E6EDF3"  # <-- FIXED: Kept light because the app background is always dark
                 coast_col = "#B0B8C1" # Subtle coastline so white continents don't merge
                 show_coast = True
             else:

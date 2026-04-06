@@ -1637,9 +1637,15 @@ def show_data_explorer():
         st.markdown(f'<div class="ib">{len(df):,} projects across '
                     f'{df["Country"].nunique()} countries. '
                     f'Darker shading = higher value.</div>', unsafe_allow_html=True)
-        metric = st.radio("Map metric:",
-                          ["Financing (USD Bn)","Project Count"],
-                          horizontal=True, key="de_map")
+    # --- 1. Metric Radio & New Light Mode Toggle ---
+        col1, col2 = st.columns([3, 1]) # Splits the row so they sit side-by-side
+        with col1:
+            metric = st.radio("Map metric:",
+                              ["Financing (USD Bn)","Project Count"],
+                              horizontal=True, key="de_map")
+        with col2:
+            light_mode = st.toggle("💡 Light Map", key="map_light_toggle")
+
         agg = (df.groupby("Country")
                  .agg(Projects=("Project","count"),
                       Financing_Bn=("Amount_2023_M",
@@ -1647,9 +1653,8 @@ def show_data_explorer():
                  .reset_index())
         col = "Financing_Bn" if "Financing" in metric else "Projects"
         col_lbl = "Financing (USD Bn)" if col=="Financing_Bn" else "Project Count"
-        # ── Choropleth map — instant, no external download ─────────
-        # Uses Plotly built-in Natural Earth boundaries (ISO-3 locationmode).
-        # Fast, reliable, no disk/memory dependency. Boundary disclaimer below.
+        
+        # [COUNTRY_ISO3 Dictionary stays exactly the same here]
         COUNTRY_ISO3 = {
             "Afghanistan":"AFG","Albania":"ALB","Algeria":"DZA","Angola":"AGO",
             "Argentina":"ARG","Armenia":"ARM","Azerbaijan":"AZE","Bangladesh":"BGD",
@@ -1683,22 +1688,29 @@ def show_data_explorer():
             "Venezuela":"VEN","Vietnam":"VNM","Yemen":"YEM","Zambia":"ZMB",
             "Zimbabwe":"ZWE","El Salvador":"SLV","Eritrea":"ERI","Eswatini":"SWZ",
             "Georgia":"GEO","Guatemala":"GTM","Haiti":"HTI","Kuwait":"KWT",
-            "Mozambique":"MOZ","North Korea":"PRK","Palestine":"PSE",
+            "North Korea":"PRK","Palestine":"PSE",
         }
+
         try:
             agg_map = agg.copy()
             agg_map["ISO3"] = agg_map["Country"].map(COUNTRY_ISO3)
             agg_map = agg_map.dropna(subset=["ISO3"])
-            col = "Financing_Bn" if "Financing" in metric else "Projects"
-            col_lbl = "Financing (USD Bn)" if col == "Financing_Bn" else "Project Count"
             
-            # --- THE FOOLPROOF FIX ---
-            # Converts to float, makes positive, and forces a minimum size of 1.0
             agg_map["Bubble_Size"] = agg_map[col].apply(
                 lambda x: max(abs(float(x)), 1.0) if pd.notnull(x) else 1.0
             )
             
-            # --- THE CORRECTED BUBBLE MAP ---
+            # --- 2. Theme Logic ---
+            if light_mode:
+                ocean_col = "#E2E8F0" # Light slate/blue for ocean
+                land_col = "#FFFFFF"  # White continents
+                font_col = "#0D1117"  # Dark text so it's readable
+            else:
+                ocean_col = "#0D1117" # Dark app background
+                land_col = "#2D3748"  # Lighter grey continents (Fix #1)
+                font_col = t["navy"]  # Standard blue text
+            
+            # --- 3. Clean Hover Map ---
             fig = px.scatter_geo(
                 agg_map,
                 locations="ISO3",
@@ -1706,16 +1718,17 @@ def show_data_explorer():
                 color=col,
                 size="Bubble_Size", 
                 size_max=35,
-                color_continuous_scale="teal", # <-- FIXED: Uses an approved Plotly colorscale
-                labels={col: col_lbl, "Bubble_Size": "Size"},
+                color_continuous_scale="teal",
+                labels={col: col_lbl},
                 hover_name="Country",
+                hover_data={"ISO3": False, "Bubble_Size": False}, # Hides the messy data (Fix #2)
                 projection="natural earth",
             )
             
             fig.update_geos(
                 showcoastlines=False, 
-                showland=True,      landcolor="#1C2330",
-                showocean=True,     oceancolor="#0D1117",
+                showland=True,      landcolor=land_col,
+                showocean=True,     oceancolor=ocean_col,
                 showlakes=False,    showframe=False,
                 showcountries=False,
             )
@@ -1724,11 +1737,11 @@ def show_data_explorer():
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0,r=0,t=42,b=8), height=430,
                 title=dict(text=f"Chinese Infrastructure {col_lbl} by Country",
-                           font=dict(size=13, color=t["navy"])),
+                           font=dict(size=13, color=font_col)),
                 coloraxis_colorbar=dict(thickness=12, len=.55,
-                                        tickfont=dict(size=9),
-                                        title=dict(text=col_lbl, font=dict(size=9))),
-                geo=dict(bgcolor="rgba(0,0,0,0)"),
+                                        tickfont=dict(size=9, color=font_col),
+                                        title=dict(text=col_lbl, font=dict(size=9, color=font_col))),
+                geo=dict(bgcolor=ocean_col),
             )
             st.plotly_chart(fig, use_container_width=True)
             st.caption(

@@ -1692,15 +1692,18 @@ def show_data_explorer():
             col = "Financing_Bn" if "Financing" in metric else "Projects"
             col_lbl = "Financing (USD Bn)" if col == "Financing_Bn" else "Project Count"
             
-            # --- THE FIX: Create a safe size column that prevents 0 or negative sizes ---
-            agg_map["Bubble_Size"] = agg_map[col].apply(lambda x: max(x, 0.1) if pd.notnull(x) else 0.1)
+            # --- THE FOOLPROOF FIX ---
+            # Converts to float, makes positive, and forces a minimum size of 1.0
+            agg_map["Bubble_Size"] = agg_map[col].apply(
+                lambda x: max(abs(float(x)), 1.0) if pd.notnull(x) else 1.0
+            )
             
             fig = px.scatter_geo(
                 agg_map,
                 locations="ISO3",
                 locationmode="ISO-3",
                 color=col,
-                size="Bubble_Size", # Uses the safe column to prevent crashes
+                size="Bubble_Size", 
                 size_max=35,
                 color_continuous_scale="cyan",
                 labels={col: col_lbl, "Bubble_Size": "Size"},

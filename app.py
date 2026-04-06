@@ -1691,24 +1691,30 @@ def show_data_explorer():
             agg_map = agg_map.dropna(subset=["ISO3"])
             col = "Financing_Bn" if "Financing" in metric else "Projects"
             col_lbl = "Financing (USD Bn)" if col == "Financing_Bn" else "Project Count"
-            fig = px.choropleth(
+            
+            # --- NEW BUBBLE MAP CODE ---
+            fig = px.scatter_geo(
                 agg_map,
                 locations="ISO3",
                 locationmode="ISO-3",
                 color=col,
-                color_continuous_scale=[[0,"#EBF5FB"],[.15,"#AED6F1"],
-                    [.35,"#5DADE2"],[.6,"#2E86C1"],[.8,"#1B4F72"],[1,"#0A1931"]],
+                size=col, # Makes the bubble bigger for larger values
+                size_max=35, # Prevents massive bubbles from covering the map
+                color_continuous_scale="cyan", # Bright color for dark mode
                 labels={col: col_lbl},
                 hover_name="Country",
                 projection="natural earth",
             )
+            
+            # Update geography to hide borders but keep the landmass
             fig.update_geos(
-                showcoastlines=True, coastlinecolor="#888888",
+                showcoastlines=False, 
                 showland=True,      landcolor="#1C2330",
                 showocean=True,     oceancolor="#0D1117",
                 showlakes=False,    showframe=False,
-                showcountries=True, countrycolor="#333D4D",
+                showcountries=False, # THIS HIDES ALL BORDERS
             )
+            
             fig.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=0,r=0,t=42,b=8), height=430,
@@ -1722,8 +1728,7 @@ def show_data_explorer():
             st.plotly_chart(fig, use_container_width=True)
             st.caption(
                 "Source: AidData (2025) CGLD v1.0 · "
-                "Boundaries shown for analytical purposes only and do not imply "
-                "any official position on territorial disputes."
+                "Data represented geographically by country center-point."
             )
         except Exception as e:
             st.info(f"Map unavailable: {e}")

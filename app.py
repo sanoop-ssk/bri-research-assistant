@@ -1637,14 +1637,15 @@ def show_data_explorer():
         st.markdown(f'<div class="ib">{len(df):,} projects across '
                     f'{df["Country"].nunique()} countries. '
                     f'Darker shading = higher value.</div>', unsafe_allow_html=True)
-    # --- 1. Metric Radio & New Light Mode Toggle ---
-        col1, col2 = st.columns([3, 1]) # Splits the row so they sit side-by-side
+    # --- 1. Metric Radio & Icon Theme Toggle ---
+        col1, col2 = st.columns([3, 1])
         with col1:
             metric = st.radio("Map metric:",
                               ["Financing (USD Bn)","Project Count"],
                               horizontal=True, key="de_map")
         with col2:
-            light_mode = st.toggle("💡 Light Map", key="map_light_toggle")
+            # Using icons as the label since Streamlit can't place text on both sides of the physical switch
+            light_mode = st.toggle("🌙 | ☀️", key="map_light_toggle")
 
         agg = (df.groupby("Country")
                  .agg(Projects=("Project","count"),
@@ -1700,15 +1701,19 @@ def show_data_explorer():
                 lambda x: max(abs(float(x)), 1.0) if pd.notnull(x) else 1.0
             )
             
-            # --- 2. Theme Logic ---
+            # --- 2. High-Contrast Theme Logic ---
             if light_mode:
-                ocean_col = "#E2E8F0" # Light slate/blue for ocean
-                land_col = "#FFFFFF"  # White continents
-                font_col = "#0D1117"  # Dark text so it's readable
+                ocean_col = "#D6E4F0" # Deeper pastel blue for contrast
+                land_col = "#FFFFFF"  # Pure white continents
+                font_col = "#000000"  # Pure black text
+                coast_col = "#B0B8C1" # Subtle coastline so white continents don't merge
+                show_coast = True
             else:
-                ocean_col = "#0D1117" # Dark app background
-                land_col = "#2D3748"  # Lighter grey continents (Fix #1)
-                font_col = t["navy"]  # Standard blue text
+                ocean_col = "#0D1117" # Deep background
+                land_col = "#3D485B"  # Lighter slate-gray for contrast
+                font_col = "#E6EDF3"  # Standard light text
+                coast_col = "rgba(0,0,0,0)"
+                show_coast = False
             
             # --- 3. Clean Hover Map ---
             fig = px.scatter_geo(
@@ -1717,16 +1722,16 @@ def show_data_explorer():
                 locationmode="ISO-3",
                 color=col,
                 size="Bubble_Size", 
-                size_max=35,
+                size_max=45, # Scaled up for the bigger map
                 color_continuous_scale="teal",
                 labels={col: col_lbl},
                 hover_name="Country",
-                hover_data={"ISO3": False, "Bubble_Size": False}, # Hides the messy data (Fix #2)
+                hover_data={"ISO3": False, "Bubble_Size": False},
                 projection="natural earth",
             )
             
             fig.update_geos(
-                showcoastlines=False, 
+                showcoastlines=show_coast, coastlinecolor=coast_col, 
                 showland=True,      landcolor=land_col,
                 showocean=True,     oceancolor=ocean_col,
                 showlakes=False,    showframe=False,
@@ -1735,12 +1740,14 @@ def show_data_explorer():
             
             fig.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                margin=dict(l=0,r=0,t=42,b=8), height=430,
+                margin=dict(l=0,r=0,t=42,b=0), 
+                height=550, # INCREASED MAP HEIGHT
+                font=dict(color=font_col), # Forces font color everywhere, fixing the light mode bug
                 title=dict(text=f"Chinese Infrastructure {col_lbl} by Country",
-                           font=dict(size=13, color=font_col)),
-                coloraxis_colorbar=dict(thickness=12, len=.55,
-                                        tickfont=dict(size=9, color=font_col),
-                                        title=dict(text=col_lbl, font=dict(size=9, color=font_col))),
+                           font=dict(size=14, color=font_col)),
+                coloraxis_colorbar=dict(thickness=12, len=.60,
+                                        tickfont=dict(size=10, color=font_col),
+                                        title=dict(text=col_lbl, font=dict(size=10, color=font_col))),
                 geo=dict(bgcolor=ocean_col),
             )
             st.plotly_chart(fig, use_container_width=True)

@@ -1692,27 +1692,28 @@ def show_data_explorer():
             col = "Financing_Bn" if "Financing" in metric else "Projects"
             col_lbl = "Financing (USD Bn)" if col == "Financing_Bn" else "Project Count"
             
-            # --- NEW BUBBLE MAP CODE ---
+            # --- THE FIX: Create a safe size column that prevents 0 or negative sizes ---
+            agg_map["Bubble_Size"] = agg_map[col].apply(lambda x: max(x, 0.1) if pd.notnull(x) else 0.1)
+            
             fig = px.scatter_geo(
                 agg_map,
                 locations="ISO3",
                 locationmode="ISO-3",
                 color=col,
-                size=col, # Makes the bubble bigger for larger values
-                size_max=35, # Prevents massive bubbles from covering the map
-                color_continuous_scale="cyan", # Bright color for dark mode
-                labels={col: col_lbl},
+                size="Bubble_Size", # Uses the safe column to prevent crashes
+                size_max=35,
+                color_continuous_scale="cyan",
+                labels={col: col_lbl, "Bubble_Size": "Size"},
                 hover_name="Country",
                 projection="natural earth",
             )
             
-            # Update geography to hide borders but keep the landmass
             fig.update_geos(
                 showcoastlines=False, 
                 showland=True,      landcolor="#1C2330",
                 showocean=True,     oceancolor="#0D1117",
                 showlakes=False,    showframe=False,
-                showcountries=False, # THIS HIDES ALL BORDERS
+                showcountries=False,
             )
             
             fig.update_layout(

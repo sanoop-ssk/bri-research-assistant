@@ -2,7 +2,7 @@ name: Browser Keepalive
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 */12 * * *" # This means "Minute 0, past every 12th hour"
   workflow_dispatch:
 
 jobs:

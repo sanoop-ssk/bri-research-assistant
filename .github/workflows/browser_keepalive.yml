@@ -1,0 +1,25 @@
+name: Browser Keepalive
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Grab the code
+        uses: actions/checkout@v3
+
+      - name: Setup Node (for the browser)
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Run the Browser Script
+        run: node ping_app.js
+        continue-on-error: true # This stops GitHub from emailing you if there is a tiny internet glitch

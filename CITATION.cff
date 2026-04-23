@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+title: "BRI DataLab"
+authors:
+  - family-names: "Koshy"
+    given-names: "Sanoop Sajan"
+date-released: 2026
+version: "1.0"
+url: "https://github.com/sanoop-ssk/bri-datalab"

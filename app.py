@@ -2073,22 +2073,21 @@ def show_about():
   stating what the analysis can and cannot establish.</p>
 </div>""", unsafe_allow_html=True)
 
-  st.markdown(f"""
+    st.markdown(f"""
 <div class="mb">
   <p class="mt">How to Cite</p>
-  <p style="color:{t['text']} !important;font-size:.86rem;line-height:1.8;margin:0;margin-bottom:1rem;">
-  If referencing this tool in academic work, please cite the companion methods paper and the underlying dataset:</p>
-  
-  <div style="background-color: #0D1117; padding: 12px; border-radius: 6px; border: 1px solid #30363D; font-size: 0.85rem; color: {t['text']} !important; margin-bottom: 1.2rem; line-height: 1.5;">
-    <strong>Methods Paper & Platform:</strong><br>
-    Sajan Koshy, Sanoop, <em>BRI DataLab: An AI-Assisted Research Platform for Chinese Infrastructure Finance</em> (April 01, 2026). Available at SSRN: <a href="https://ssrn.com/abstract=6648401" target="_blank" style="color: #58A6FF; text-decoration: none;">https://ssrn.com/abstract=6648401</a>
-  </div>
-
-  <div style="background-color: #0D1117; padding: 12px; border-radius: 6px; border: 1px solid #30363D; font-size: 0.85rem; color: {t['text']} !important; margin-bottom: 0.5rem; line-height: 1.5;">
-    <strong>Underlying Dataset:</strong><br>
-    AidData. (2025). <em>China's Global Loans and Grants Dataset, Version 1.0.</em> Williamsburg, VA: AidData at William &amp; Mary. <a href="https://www.aiddata.org/data/chinas-global-loans-and-grants-dataset-1-0" target="_blank" style="color: #58A6FF; text-decoration: none;">aiddata.org/data/chinas-global-loans-and-grants-dataset-1-0</a>
-  </div>
+  <p style="color:{t['text']} !important;font-size:.86rem;line-height:1.8;margin:0">
+  If referencing this tool in academic work, please cite the companion methods paper
+  (forthcoming) and the underlying dataset:<br><br>
+  Sajan Koshy, Sanoop, <em>BRI DataLab: An AI-Assisted Research Platform for Chinese Infrastructure Finance.</em> (April 01, 2026). Available at SSRN: <a href="https://ssrn.com/abstract=6648401" target="_blank" style="color: #58A6FF; text-decoration: none;">https://ssrn.com/abstract=6648401</a> <br><br>
+  AidData. (2025). <em>China's Global Loans and Grants Dataset, Version 1.0.</em>
+  Williamsburg, VA: AidData at William &amp; Mary.<br>
+  Available at: <a href="https://www.aiddata.org/data/chinas-global-loans-and-grants-dataset-1-0" target="_blank" style="color:#2E6DA4">aiddata.org/data/chinas-global-loans-and-grants-dataset-1-0</a></p>
 </div>""", unsafe_allow_html=True)
+
+    st.markdown(f'''
+<div class="pf">Copyright © BRI DataLab 2026</div>''',
+    unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════
 # PAGE 6 — CONTACT
